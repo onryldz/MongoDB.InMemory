@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29709.97
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoDB.InMemory", "MongoDB.InMemory\MongoDB.InMemory.csproj", "{77235FDC-8D7D-4C25-82DF-448481B78418}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{70CB5237-E954-4F83-A30F-EB555823AC7C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoDB.InMemory.Test", "Test\MongoDB.InMemory.Test\MongoDB.InMemory.Test.csproj", "{30B99B65-AA94-4E52-A968-9F8682999816}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{77235FDC-8D7D-4C25-82DF-448481B78418}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77235FDC-8D7D-4C25-82DF-448481B78418}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77235FDC-8D7D-4C25-82DF-448481B78418}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77235FDC-8D7D-4C25-82DF-448481B78418}.Release|Any CPU.Build.0 = Release|Any CPU
+		{30B99B65-AA94-4E52-A968-9F8682999816}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{30B99B65-AA94-4E52-A968-9F8682999816}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{30B99B65-AA94-4E52-A968-9F8682999816}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{30B99B65-AA94-4E52-A968-9F8682999816}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{30B99B65-AA94-4E52-A968-9F8682999816} = {70CB5237-E954-4F83-A30F-EB555823AC7C}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {E6E21B5B-A959-480A-A00A-FFE0622FD68E}
+	EndGlobalSection
+EndGlobal
