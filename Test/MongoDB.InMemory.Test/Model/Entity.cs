@@ -8,5 +8,6 @@
         public bool Bool { get; set; }
         public SubEntity Sub { get; set; }
         public SubEntity[] Subs { get; set; }
+        public int[] IntArray { get; set; }
     }
 }

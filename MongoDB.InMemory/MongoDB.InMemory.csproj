@@ -4,7 +4,11 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <LangVersion>8</LangVersion>
     <Version>1.0.4</Version>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/onryldz/MongoDB.InMemory</PackageProjectUrl>
+    <Authors>Onur YILDIZ</Authors>
+    <Description>MongoDB InMemory Package</Description>
+    <PackageReadmeFile>https://raw.githubusercontent.com/onryldz/MongoDB.InMemory/main/README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>

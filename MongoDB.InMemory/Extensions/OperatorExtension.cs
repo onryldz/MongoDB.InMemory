@@ -1,4 +1,5 @@
-﻿using MongoDB.InMemory.Exceptions;
+﻿using System;
+using MongoDB.InMemory.Exceptions;
 using MongoDB.InMemory.ObjectModel.Enums;
 
 namespace MongoDB.InMemory.Extensions
@@ -8,7 +9,7 @@ namespace MongoDB.InMemory.Extensions
 
         public static Operator? ToOperator(this string op)
         {
-            if (string.IsNullOrWhiteSpace(op) || op[0] != '$')
+            if (!op.IsOperator())
                 return null;
 
             return op switch
@@ -29,13 +30,43 @@ namespace MongoDB.InMemory.Extensions
                 "$type" => Operator.Type,
                 "$regex" => Operator.Regex,
                 "$elemMatch" => Operator.ElemMatch,
+                "$all" => Operator.All,
                 _ => throw new UnknownQuerySelector(op)
             };
         }
+        
+        public static string ToOperatorString(this Operator op)
+        {
+            return op switch
+            {
+                Operator.Equal => "$eq",
+                Operator.In => "$in",
+                Operator.GreaterThan => "$gt",
+                Operator.GreaterThanOrEqual => "$gte",
+                Operator.LessThan => "$lt",
+                Operator.LessThanOrEqual => "$lte",
+                Operator.NotEqual => "$ne",
+                Operator.NotIn => "$nin",
+                Operator.And => "$and",
+                Operator.Not => "$not",
+                Operator.Nor => "$nor",
+                Operator.Or => "$or",
+                Operator.Exists => "$exists",
+                Operator.Type => "$type",
+                Operator.Regex => "$regex",
+                Operator.ElemMatch => "$elemMatch",
+                Operator.All => "$all",
+                _ => throw new ArgumentOutOfRangeException(op.ToString())
+            };
+        }
 
+        public static bool IsOperator(this string value)
+        {
+            return value != null & !string.IsNullOrWhiteSpace(value) && value[0] == '$';
+        }
         public static PipelineOperator? ToPipelineOperator(this string op)
         {
-            if (string.IsNullOrWhiteSpace(op) || op[0] != '$')
+            if (!op.IsOperator())
                 return null;
 
             return op switch
@@ -69,6 +100,8 @@ namespace MongoDB.InMemory.Extensions
                 "$sortByCount" => PipelineOperator.SortByCount,
                 "$unionWith" => PipelineOperator.UnionWith,
                 "$unset" => PipelineOperator.Unset,
+                "$pull" => PipelineOperator.Pull,
+                "$push" => PipelineOperator.Push,
                 "$unwind" => PipelineOperator.Unwind,
                 _ => throw new UnknownQuerySelector(op)
             };

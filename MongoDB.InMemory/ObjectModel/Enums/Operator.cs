@@ -17,6 +17,7 @@
         Exists,
         Type,
         Regex,
-        ElemMatch
+        ElemMatch,
+        All
     }
 }

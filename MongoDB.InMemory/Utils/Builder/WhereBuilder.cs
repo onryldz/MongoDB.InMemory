@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using MongoDB.Bson;
 using MongoDB.InMemory.Extensions;
@@ -14,26 +15,28 @@ namespace MongoDB.InMemory.Utils.Builder
 
         public static Func<BsonValue, bool> Compile(BsonDocument filter)
         {
-            var parameterExpression = System.Linq.Expressions.Expression.Parameter(typeof(BsonValue), "f");
+            var parameterExpression = Expression.Parameter(typeof(BsonValue), "f");
             var body = filter.Elements.ReadExpression(parameterExpression);
-            return System.Linq.Expressions.Expression
+            return Expression
                 .Lambda<Func<BsonValue, bool>>(body, parameterExpression)
                 .Compile();
         }
 
-        private static System.Linq.Expressions.Expression ReadExpression(this IEnumerable<BsonElement> self, System.Linq.Expressions.Expression parameterExpression, BsonElement? member = null)
+        private static Expression ReadExpression(this IEnumerable<BsonElement> self,
+            Expression parameterExpression, BsonElement? member = null)
         {
-            return self.Aggregate((System.Linq.Expressions.Expression)null, (acc, element) =>
+            return self.Aggregate((Expression) null, (acc, element) =>
             {
                 var expression = ReadBinaryOrUnaryExpr(element, parameterExpression, member);
                 if (acc != null)
-                    expression = System.Linq.Expressions.Expression.And(acc, expression);
+                    expression = Expression.And(acc, expression);
 
                 return expression;
             });
         }
 
-        private static System.Linq.Expressions.Expression ReadBinaryOrUnaryExpr(BsonElement element, System.Linq.Expressions.Expression parameterExpression, BsonElement? member = null)
+        private static Expression ReadBinaryOrUnaryExpr(BsonElement element,
+            Expression parameterExpression, BsonElement? member = null)
         {
             var op = element.Name.ToOperator();
             if (!op.HasValue && element.Value.BsonType == BsonType.RegularExpression)
@@ -47,41 +50,104 @@ namespace MongoDB.InMemory.Utils.Builder
 
             return op switch
             {
+                Operator.ElemMatch when member == null => ReadOpenElemMatchExpr(element, parameterExpression),
                 Operator.ElemMatch => ReadElemMatchExpr(member.Value, parameterExpression),
                 Operator.Not => ReadNotExpr(element, member.Value, parameterExpression),
-                _ => element.Value.AsBsonDocument.Elements.ReadExpression(parameterExpression, op.HasValue ? member : element)
+                _ => element.Value.AsBsonDocument.Elements.ReadExpression(parameterExpression,
+                    op.HasValue ? member : element)
             };
         }
 
-        private static System.Linq.Expressions.Expression ReadNotExpr(BsonElement element, BsonElement member, System.Linq.Expressions.Expression parameterExpression)
+        private static Expression ReadOpenElemMatchExpr(BsonElement bsonElement, Expression parameterExpression)
+        {
+            return CallPredicate(parameterExpression, null, bsonElement.Value, Operator.ElemMatch);
+        }
+
+        private static Expression ReadNotExpr(BsonElement element, BsonElement member,
+            Expression parameterExpression)
         {
             var expr = element.Value.AsBsonDocument.Elements.ReadExpression(parameterExpression, new BsonElement(member.Name, element.Value));
-            return System.Linq.Expressions.Expression.Not(expr);
+            return Expression.Not(expr);
         }
 
-        private static System.Linq.Expressions.Expression ReadElemMatchExpr(BsonElement member, System.Linq.Expressions.Expression parameterExpression)
+        private static Expression ReadElemMatchExpr(BsonElement member,
+            Expression parameterExpression)
         {
-            try
-            {
-                return CallPredicate(parameterExpression, member.Name, member.Value["$elemMatch"], Operator.ElemMatch);
-            }
-            catch (Exception e)
-            {
-                throw new Exception(member.ToString(), e);
-            }
+            return CallPredicate(parameterExpression, member.Name, member.Value["$elemMatch"], Operator.ElemMatch);
         }
 
-        private static System.Linq.Expressions.Expression CallPredicate(System.Linq.Expressions.Expression parameterExpression, string memberName, BsonValue right, Operator? op)
+        private static Expression CallPredicate(
+            Expression parameterExpression, string memberName, BsonValue right, Operator? op)
         {
-            var memberNameExpr = System.Linq.Expressions.Expression.Constant(memberName, typeof(string));
-            var memberValueExpr = System.Linq.Expressions.Expression.Constant(right, typeof(BsonValue));
-            var opExpression = System.Linq.Expressions.Expression.Constant(op, typeof(Operator?));
-            return System.Linq.Expressions.Expression.Call(CompareMethod, parameterExpression, memberNameExpr, memberValueExpr, opExpression);
+            var memberNameExpr = Expression.Constant(memberName, typeof(string));
+            var memberValueExpr = Expression.Constant(right, typeof(BsonValue));
+            var opExpression = Expression.Constant(op, typeof(Operator?));
+            return Expression.Call(CompareMethod, parameterExpression, memberNameExpr,
+                memberValueExpr, opExpression);
+        }
+
+        private static bool PredicateArray(BsonArray bsonArray, BsonValue right, Operator? op)
+        {
+            return op switch
+            {
+                null when right.IsBsonArray => bsonArray == right,
+                null when right.IsBsonDocument => PredicateArrayWithFilter(bsonArray, right.AsBsonDocument),
+                null => !right.IsBsonDocument && bsonArray.Contains(right),
+                Operator.All => right.IsBsonArray && PredicateArrayAllOp(bsonArray, right.AsBsonArray),
+                Operator.ElemMatch => ElemMatch(bsonArray, right),
+                _ => bsonArray.All(document => Predicate(document, null, right, op))
+            };
+        }
+
+        private static bool PredicateArrayWithFilter(BsonArray instanceValue, BsonDocument filter)
+        {
+            var predicate = Compile(filter);
+            return instanceValue.Any(predicate);
+        }
+        
+        private static bool PredicateArrayAllOp(BsonArray instanceValue, BsonArray allConditions)
+        {
+            var predicates = allConditions
+                .Where(f => f.BsonType == BsonType.Document)
+                .Select(value => Compile(value.AsBsonDocument))
+                .ToArray();
+
+            bool conditionResult;
+            var hasPredicate = predicates.Any();
+            if (hasPredicate)
+            {
+                conditionResult = predicates.All(predicate => predicate(instanceValue));
+                if (!conditionResult)
+                    return false;    
+            }
+
+            var values = allConditions
+                .Where(f => f.BsonType != BsonType.Document)
+                .ToArray();
+
+            var hasValues = values.Any();
+            if (hasValues)
+            {
+                conditionResult = values.All(f => instanceValue.Any(r => f == r));
+                if (!conditionResult)
+                    return false;
+            }
+
+            return hasValues || hasPredicate;
         }
 
         private static bool Predicate(BsonValue document, string memberName, BsonValue right, Operator? op)
         {
-            var found = document.GetValueWithPath(memberName, out var left);
+            if (memberName == null || memberName.IsOperator())
+                return PredicateValue(right, document, op, false);
+            
+            return document.GetValuesWithDotNotation(memberName, out var values) 
+                ? values.Any(left => PredicateValue(right, left, op, true))
+                : PredicateValue(right, null, op, false);
+        }
+
+        private static bool PredicateValue(BsonValue right, BsonValue left, Operator? op, bool found)
+        {
             switch (op)
             {
                 case Operator.Exists:
@@ -94,8 +160,8 @@ namespace MongoDB.InMemory.Utils.Builder
                     return right.AsBsonArray.Select(f => f.GetBsonTypeFromValue()).Any(f => f == left.BsonType);
             }
 
-            if (!found || left.BsonType != right.BsonType && op != Operator.In && op != Operator.NotIn && op != Operator.Regex && op != Operator.ElemMatch)
-                return false;
+            if (left?.IsBsonArray == true)
+                return PredicateArray(left.AsBsonArray, right, op);
 
             op ??= Operator.Equal;
             return op switch
@@ -110,7 +176,7 @@ namespace MongoDB.InMemory.Utils.Builder
                 Operator.NotEqual => left != right,
                 Operator.Not => right == false,
                 Operator.Exists => true,
-                Operator.Regex => right.AsRegex.IsMatch(left.AsString),
+                Operator.Regex => left != null && right.AsRegex.IsMatch(left.AsString),
                 Operator.ElemMatch => ElemMatch(left, right),
                 _ => throw new ArgumentOutOfRangeException()
             };
@@ -132,21 +198,24 @@ namespace MongoDB.InMemory.Utils.Builder
             return right == left;
         }
 
-        private static System.Linq.Expressions.Expression ReadLogicalExpr(this BsonArray self, Operator op, System.Linq.Expressions.Expression parameterExpression)
+        private static Expression ReadLogicalExpr(this BsonArray self, Operator op,
+            Expression parameterExpression)
         {
-            return self.Aggregate((System.Linq.Expressions.Expression)null, (acc, right) =>
+            return self.Aggregate((Expression) null, (acc, right) =>
             {
                 var expression = right.AsBsonDocument.ReadExpression(parameterExpression);
                 if (acc != null)
                 {
                     expression = op switch
                     {
-                        Operator.Or => System.Linq.Expressions.Expression.Or(acc, expression),
-                        Operator.And => System.Linq.Expressions.Expression.And(acc, expression),
-                        Operator.Nor => System.Linq.Expressions.Expression.Not(System.Linq.Expressions.Expression.Or(acc, expression)),
+                        Operator.Or => Expression.Or(acc, expression),
+                        Operator.And => Expression.And(acc, expression),
+                        Operator.Nor => Expression.Not(
+                            Expression.Or(acc, expression)),
                         _ => throw new ArgumentOutOfRangeException()
                     };
                 }
+
                 return expression;
             });
         }

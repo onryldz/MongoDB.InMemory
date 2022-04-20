@@ -6,9 +6,9 @@ Officially MongoDB does not have support for the InMemory. This package will hel
 
 * **Aggregation**: `$match`, `$limit`, `$skip`, `$sort`, `$project`
 
-* **Where**: `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$not`, `$nin`, `dotNotation`, `$or`, `$and`, `$exists`, `$type`, `regex`, `$elemMatch`
+* **Where**: `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$not`, `$nin`, `dotNotation`, `$or`, `$and`, `$exists`, `$type`, `regex`, `$elemMatch`, `$all`
 
-* **Update**: `$set`
+* **Update**: `$set`, `$unset`, `$pull`, `$push`
 
 
 Unsupported functionalities are in development process, they will be implemented soon. 

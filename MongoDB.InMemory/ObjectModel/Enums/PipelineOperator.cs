@@ -31,6 +31,8 @@
         SortByCount,
         UnionWith,
         Unset,
+        Pull,
+        Push,
         Unwind
     }
 }

@@ -285,10 +285,50 @@ namespace MongoDB.InMemory.Test
         [Theory]
         [InlineData("@sub", true)]
         [InlineData("@@@@", false)]
-        public void DotNotationArrayTest(string findValue, bool shouldBeFound)
+        public void DotNotationArrayTest_WithPosition(string findValue, bool shouldBeFound)
         {
             // Arrange
             var filter = BsonDocument.Parse($"{{\"Subs.1.Str\": \"{findValue}\"}}");
+            var func = WhereBuilder.Compile(filter);
+            var expect = new Entity
+            {
+                Str = "test",
+                Int = 11,
+                Subs = new[]
+                {
+                    new SubEntity
+                    {
+                        Str = "sub1"
+                    },
+                    new SubEntity
+                    {
+                        Str = "@sub"
+                    }
+                }
+            };
+            var items = GenerateEntities(4, expect)
+                .Select(f => new BsonDocumentWrapper(f))
+                .ToList();
+
+            // Act
+            var result = items
+                .Where(func)
+                .Select(f => (Entity)((BsonDocumentWrapper)f).Wrapped)
+                .ToArray();
+
+            // Assert
+            result.Length.Should().Be(shouldBeFound ? 1 : 0);
+            if (shouldBeFound)
+                result[0].Should().BeEquivalentTo(expect);
+        }
+        
+        [Theory]
+        [InlineData("@sub", true)]
+        [InlineData("@@@@", false)]
+        public void DotNotationArrayTest_WithoutPosition(string findValue, bool shouldBeFound)
+        {
+            // Arrange
+            var filter = BsonDocument.Parse($"{{\"Subs.Str\": \"{findValue}\"}}");
             var func = WhereBuilder.Compile(filter);
             var expect = new Entity
             {
@@ -565,6 +605,139 @@ namespace MongoDB.InMemory.Test
 
             // Assert
             result.Should().NotContain(unexpected);
+        }
+        
+        [Fact]
+        public void ArrayOfAnElement()
+        {
+            // Arrange
+            var filter = BsonDocument.Parse("{IntArray: 2}");
+            var func = WhereBuilder.Compile(filter);
+            var expectation = new BsonDocumentWrapper(new Entity { IntArray = new []{1, 2, 3}});
+            var items = new List<BsonDocumentWrapper>
+            {
+                new BsonDocumentWrapper(new Entity { IntArray = new []{11, 32, 43}}),
+                expectation,
+                new BsonDocumentWrapper(new Entity { IntArray = new []{51, 62, 73}})
+            };
+
+            // Act
+            var result = items.FirstOrDefault(func);
+
+            // Assert
+            result.Should().BeEquivalentTo(expectation);
+        }
+        
+        [Fact]
+        public void ArrayEquals()
+        {
+            // Arrange
+            var filter = BsonDocument.Parse("{IntArray: [1,2]}");
+            var func = WhereBuilder.Compile(filter);
+            var expectation = new BsonDocumentWrapper(new Entity { IntArray = new []{1, 2}});
+            var items = new List<BsonDocumentWrapper>
+            {
+                new BsonDocumentWrapper(new Entity { IntArray = new []{2, 1}}),
+                expectation,
+                new BsonDocumentWrapper(new Entity { IntArray = new []{1,2,3}})
+            };
+
+            // Act
+            var result = items.FirstOrDefault(func);
+
+            // Assert
+            result.Should().BeEquivalentTo(expectation);
+        }
+        
+        
+        [Fact]
+        public void ArrayAllOperatorWithElemMatch()
+        {
+            // Arrange
+            var filter = BsonDocument.Parse("{IntArray: {$all: [{$elemMatch:{$gt:0, $lt:3}}]}}");
+            var func = WhereBuilder.Compile(filter);
+            var expectation1 = new BsonDocumentWrapper(new Entity { IntArray = new []{1, 2}});
+            var expectation2 = new BsonDocumentWrapper(new Entity { IntArray = new []{2, 1}});
+            var items = new List<BsonDocumentWrapper>
+            {
+                expectation1,
+                new BsonDocumentWrapper(new Entity { IntArray = new []{4,5}}),
+                expectation2
+            };
+
+            // Act
+            var result = items.Where(func);
+
+            // Assert
+            result.Should().BeEquivalentTo(expectation1, expectation2);
+        }
+        
+        [Fact]
+        public void ArrayAllOperatorWithElemMatchAndNot()
+        {
+            // Arrange
+            var filter = BsonDocument.Parse("{IntArray: {$not: {$all: [{$elemMatch:{$gt:0, $lt:3}}]}}}");
+            var func = WhereBuilder.Compile(filter);
+            var expectation = new BsonDocumentWrapper(new Entity {IntArray = new[] {4, 5}});
+            var items = new List<BsonDocumentWrapper>
+            {
+                new BsonDocumentWrapper(new Entity { IntArray = new []{1, 2}}),
+                expectation,
+                new BsonDocumentWrapper(new Entity { IntArray = new []{2, 1}})
+            };
+
+            // Act
+            var result = items
+                .Where(func)
+                .ToArray();
+
+            // Assert
+            result.Length.Should().Be(1);
+            result[0].Should().BeEquivalentTo(expectation);
+        }
+        
+        [Fact]
+        public void ArrayAllOperator()
+        {
+            // Arrange
+            var filter = BsonDocument.Parse("{IntArray: {$all: [1,2]}}");
+            var func = WhereBuilder.Compile(filter);
+            var expectation1 = new BsonDocumentWrapper(new Entity { IntArray = new []{1, 2}});
+            var expectation2 = new BsonDocumentWrapper(new Entity { IntArray = new []{2, 1}});
+            var items = new List<BsonDocumentWrapper>
+            {
+                expectation1,
+                new BsonDocumentWrapper(new Entity { IntArray = new []{2,3,4}}),
+                expectation2
+            };
+
+            // Act
+            var result = items.Where(func);
+
+            // Assert
+            result.Should().BeEquivalentTo(expectation1, expectation2);
+        }
+        
+        [Fact]
+        public void ArrayFilterWithBsonObject()
+        {
+            // Arrange
+            var filter = BsonDocument.Parse("{IntArray: {$gt:0, $lt:3}}");
+            var func = WhereBuilder.Compile(filter);
+            var expectation1 = new BsonDocumentWrapper(new Entity { IntArray = new []{1, 2}});
+            var expectation2 = new BsonDocumentWrapper(new Entity { IntArray = new []{2, 1}});
+            var items = new List<BsonDocumentWrapper>
+            {
+                expectation1,
+                new BsonDocumentWrapper(new Entity { IntArray = new []{4,5}}),
+                expectation2
+            };
+
+            // Act
+            var result = items.Where(func);
+
+            // Assert
+            result.Should().BeEquivalentTo(expectation1, expectation2);
         }
     }
 }

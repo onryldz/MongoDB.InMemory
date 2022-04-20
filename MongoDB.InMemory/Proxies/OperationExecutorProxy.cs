@@ -24,8 +24,8 @@ namespace MongoDB.InMemory.Proxies
         private readonly ConcurrentDictionary<string, SynchronizedCollection<BsonValue>> _collectionDict = new ConcurrentDictionary<string, SynchronizedCollection<BsonValue>>();
 
         public IMongoClient Client { get; set; }
-
-        public TResult ExecuteReadOperation<TResult>(IReadBinding binding, IReadOperation<TResult> operation, CancellationToken cancellationToken)
+        
+        private TResult ExecuteReadOperation<TResult>(IReadBinding binding, IReadOperation<TResult> operation, CancellationToken cancellationToken)
         {
             var type = operation.GetType();
             var operationType = type.IsAssignableToGenericType(TypeDefinitions.ReadOperationMethodMapping.Keys.ToArray());
@@ -76,7 +76,7 @@ namespace MongoDB.InMemory.Proxies
 
         #region Write Operation
 
-        public TResult ExecuteWriteOperation<TResult>(IWriteBinding binding, IWriteOperation<TResult> operation,
+        private TResult ExecuteWriteOperation<TResult>(IWriteBinding binding, IWriteOperation<TResult> operation,
             CancellationToken cancellationToken)
         {
             if (operation is BulkMixedWriteOperation bulkWrite)
@@ -92,7 +92,7 @@ namespace MongoDB.InMemory.Proxies
             return (TResult)Activator.CreateInstance(resultType);
         }
 
-        public BulkWriteOperationResult WriteOperationBulk(IWriteBinding binding, BulkMixedWriteOperation operation)
+        private BulkWriteOperationResult WriteOperationBulk(IWriteBinding binding, BulkMixedWriteOperation operation)
         {
             var collection = GetCollection(operation.CollectionNamespace);
             var requests = operation.Requests.ToArray();
@@ -121,16 +121,22 @@ namespace MongoDB.InMemory.Proxies
                 .ToArray();
 
             var entitiesInCollection = updateRequests
-                .Select(f =>
+                .Select(updateRequest =>
                 {
-                    var predicate = WhereBuilder.Compile(f.Filter);
-                    return (replaceItems: collection.Where(predicate), updareRequest: f);
+                    var predicate = WhereBuilder.Compile(updateRequest.Filter);
+                    var result = (replaceDocuments: collection.Where(predicate), updareRequest: updateRequest);
+                    if (!updateRequest.IsMulti)
+                        result.replaceDocuments = result.replaceDocuments.Take(1);
+                    return result;
                 }).ToArray();
 
-            foreach (var (replaceItems, updateRequest) in entitiesInCollection)
+            foreach (var (replaceDocuments, updateRequest) in entitiesInCollection)
             {
-                foreach (var replaceItem in replaceItems)
-                    DocumentUpdater.Set(replaceItem, updateRequest.Update);
+                foreach (var replaceItem in replaceDocuments)
+                {
+                    DocumentUpdater.Update(replaceItem, updateRequest.Update);
+                    updateCount++;
+                }
             }
            
             return updateCount;
@@ -241,7 +247,7 @@ namespace MongoDB.InMemory.Proxies
             return bag;
         }
 
-        public IClientSessionHandle StartImplicitSession(CancellationToken cancellationToken)
+        private IClientSessionHandle StartImplicitSession(CancellationToken cancellationToken)
         {
             var cluster = Mock.Of<ICluster>();
             var options = new ClientSessionOptions();
@@ -263,7 +269,7 @@ namespace MongoDB.InMemory.Proxies
             return generator.CreateInterfaceProxyWithoutTarget(TypeDefinitions.IOperationExecutorType, new InterceptorX(this));
         }
 
-        internal class InterceptorX : IInterceptor
+        private class InterceptorX : IInterceptor
         {
             private readonly OperationExecutorProxy _executor;
             private readonly Type _executorType;
